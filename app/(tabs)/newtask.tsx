@@ -12,13 +12,7 @@ export default function NewTaskScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   const activeTasks = tasks.filter(t => !t.completed);
-
-  const formatDateString = (date: Date) => {
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
+  const formatDateString = (date: Date) => date.toISOString().split('T')[0];
   
   const formatTimeString = (date: Date) => {
     const hours = date.getHours().toString().padStart(2, '0');
@@ -28,9 +22,9 @@ export default function NewTaskScreen() {
 
   const isTaskExpired = (taskDate: string, taskTime: string) => {
     const now = new Date();
-    const [year, month, day] = taskDate.split('-').map(Number);
     const [hours, minutes] = taskTime.split(':').map(Number);
-    const taskDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    const taskDateTime = new Date(taskDate);
+    taskDateTime.setHours(hours, minutes, 0, 0);
     return now > taskDateTime;
   };
 
@@ -50,6 +44,10 @@ export default function NewTaskScreen() {
       updatedDate.setHours(selectedTime.getHours(), selectedTime.getMinutes());
       setCurrentDate(updatedDate);
     }
+  };
+
+  const setNowDateTime = () => {
+    setCurrentDate(new Date());
   };
 
   const handleAdd = () => {
@@ -72,36 +70,73 @@ export default function NewTaskScreen() {
         />
         
         <View style={styles.rowInputs}>
-          <TouchableOpacity style={styles.pickerButton} onPress={() => setShowDatePicker(true)}>
-            <Ionicons name="calendar-outline" size={18} color="#2f95dc" style={{ marginRight: 8 }} />
-            <Text style={styles.pickerButtonText}>{formatDateString(currentDate)}</Text>
-          </TouchableOpacity>
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>Scadenza Giorno</Text>
+            <TouchableOpacity style={styles.pickerButton} onPress={() => setShowDatePicker(true)}>
+              <Ionicons name="calendar-outline" size={18} color="#2f95dc" style={{ marginRight: 8 }} />
+              <Text style={styles.pickerButtonText}>{formatDateString(currentDate)}</Text>
+            </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity style={styles.pickerButton} onPress={() => setShowTimePicker(true)}>
-            <Ionicons name="time-outline" size={18} color="#2f95dc" style={{ marginRight: 8 }} />
-            <Text style={styles.pickerButtonText}>{formatTimeString(currentDate)}</Text>
-          </TouchableOpacity>
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>Scadenza Ora</Text>
+            <TouchableOpacity style={styles.pickerButton} onPress={() => setShowTimePicker(true)}>
+              <Ionicons name="time-outline" size={18} color="#2f95dc" style={{ marginRight: 8 }} />
+              <Text style={styles.pickerButtonText}>{formatTimeString(currentDate)}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {showDatePicker && (
-          <DateTimePicker value={currentDate} mode="date" display="default" onChange={onDateChange} themeVariant="dark" />
-        )}
-        {showTimePicker && (
-          <DateTimePicker value={currentDate} mode="time" is24Hour={true} display="default" onChange={onTimeChange} themeVariant="dark" />
+          <DateTimePicker
+            value={currentDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={onDateChange}
+            themeVariant="dark"
+          />
         )}
 
-        <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
-          <Ionicons name="add" size={20} color="#fff" style={{ marginRight: 5 }} />
-          <Text style={styles.addButtonText}>Aggiungi</Text>
-        </TouchableOpacity>
+        {showTimePicker && (
+          <DateTimePicker
+            value={currentDate}
+            mode="time"
+            is24Hour={true}
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={onTimeChange}
+            themeVariant="dark"
+          />
+        )}
+
+        {Platform.OS === 'ios' && (showDatePicker || showTimePicker) && (
+          <TouchableOpacity 
+            style={styles.closePickerBtn} 
+            onPress={() => { setShowDatePicker(false); setShowTimePicker(false); }}
+          >
+            <Text style={styles.closePickerTxt}>Conferma Orario/Data</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.actionButtonsRow}>
+          <TouchableOpacity style={styles.nowButton} onPress={setNowDateTime}>
+            <Ionicons name="flash" size={18} color="#FFCC00" style={{ marginRight: 5 }} />
+            <Text style={styles.nowButtonText}>Attuale</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
+            <Ionicons name="add" size={20} color="#fff" style={{ marginRight: 5 }} />
+            <Text style={styles.addButtonText}>Aggiungi Task</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <Text style={styles.sectionTitle}>I tuoi task attivi</Text>
+      <Text style={styles.sectionTitle}>Tutti i task attivi</Text>
       <FlatList 
         data={activeTasks}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
           const expired = isTaskExpired(item.date, item.time);
+
           return (
             <View style={[styles.taskItem, expired && styles.expiredItem]}>
               <View style={styles.taskInfo}>
@@ -121,6 +156,11 @@ export default function NewTaskScreen() {
             </View>
           );
         }}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Nessuna task attiva. Ottimo lavoro!</Text>
+          </View>
+        }
       />
     </View>
   );
@@ -132,9 +172,16 @@ const styles = StyleSheet.create({
   formContainer: { backgroundColor: '#1e1e2d', padding: 15, borderRadius: 8, marginBottom: 25 },
   input: { backgroundColor: '#161622', padding: 12, borderRadius: 6, color: '#fff', fontSize: 16, marginBottom: 15 },
   rowInputs: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
-  pickerButton: { flex: 0.48, backgroundColor: '#161622', padding: 12, borderRadius: 6, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  inputWrapper: { flex: 0.48 },
+  label: { color: '#888', fontSize: 12, marginBottom: 5 },
+  pickerButton: { backgroundColor: '#161622', padding: 12, borderRadius: 6, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   pickerButtonText: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  addButton: { backgroundColor: '#2f95dc', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 12, borderRadius: 6 },
+  closePickerBtn: { backgroundColor: '#222', padding: 8, borderRadius: 6, alignItems: 'center', marginBottom: 15 },
+  closePickerTxt: { color: '#2f95dc', fontWeight: 'bold' },
+  actionButtonsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  nowButton: { flex: 0.32, backgroundColor: '#2a2a3a', borderWidth: 1, borderColor: '#444', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 12, borderRadius: 6 },
+  nowButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  addButton: { flex: 0.64, backgroundColor: '#2f95dc', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 12, borderRadius: 6 },
   addButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff', marginBottom: 15 },
   taskItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e1e2d', padding: 14, borderRadius: 8, marginBottom: 10 },
@@ -144,5 +191,7 @@ const styles = StyleSheet.create({
   dateText: { fontSize: 12, color: '#888', marginTop: 3 },
   expiredText: { color: '#ffcccc', fontWeight: 'bold' },
   actions: { flexDirection: 'row', alignItems: 'center' },
-  iconButton: { marginRight: 15 }
+  iconButton: { marginRight: 15 },
+  emptyContainer: { alignItems: 'center', marginTop: 20 },
+  emptyText: { color: '#888', fontSize: 16 }
 });
