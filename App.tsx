@@ -21,7 +21,6 @@ const STORAGE_KEY = '@todo_tasks_storage';
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
-
   useEffect(() => {
     const loadTasks = async () => {
       try {
@@ -112,7 +111,7 @@ export default function App() {
           {(props) => (
             <OldTaskScreen 
               {...props}
-              tasks={tasks.filter(t => t.completed)} 
+              tasks={tasks}
               completeTask={completeTask}
               deleteTask={deleteTask}
             />

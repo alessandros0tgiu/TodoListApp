@@ -17,9 +17,12 @@ export default function NewTaskScreen({ tasks, addTask, completeTask, deleteTask
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const now = new Date();
-
-  const formatDateString = (date: Date) => date.toISOString().split('T')[0];
+  const formatDateString = (date: Date) => {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
   
   const formatTimeString = (date: Date) => {
     const hours = date.getHours().toString().padStart(2, '0');
@@ -28,9 +31,10 @@ export default function NewTaskScreen({ tasks, addTask, completeTask, deleteTask
   };
 
   const isTaskExpired = (taskDate: string, taskTime: string) => {
+    const now = new Date();
+    const [year, month, day] = taskDate.split('-').map(Number);
     const [hours, minutes] = taskTime.split(':').map(Number);
-    const taskDateTime = new Date(taskDate);
-    taskDateTime.setHours(hours, minutes, 0, 0);
+    const taskDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
     return now > taskDateTime;
   };
 
@@ -137,7 +141,7 @@ export default function NewTaskScreen({ tasks, addTask, completeTask, deleteTask
               <View style={styles.taskInfo}>
                 <Text style={styles.taskText}>{item.text}</Text>
                 <Text style={[styles.dateText, expired && styles.expiredText]}>
-                  ⚠️ Scaduto il: {item.date} alle {item.time}
+                  {expired ? `⚠️ Scaduto il: ${item.date}` : `📅 Scadenza: ${item.date}`} alle {item.time}
                 </Text>
               </View>
               <View style={styles.actions}>

@@ -5,36 +5,64 @@ import { Task } from '../App';
 
 interface OldTaskProps {
   tasks: Task[];
-  completeTask: (id: string) => void; // <-- Aggiunto per gestire la deselezione
+  completeTask: (id: string) => void;
   deleteTask: (id: string) => void;
 }
 
 export default function OldTaskScreen({ tasks, completeTask, deleteTask }: OldTaskProps) {
+  const now = new Date();
+
+  const isTaskExpired = (taskDate: string, taskTime: string) => {
+    const [year, month, day] = taskDate.split('-').map(Number);
+    const [hours, minutes] = taskTime.split(':').map(Number);
+    const taskDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    return now > taskDateTime;
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Tutti i Task Completati</Text>
+      <Text style={styles.title}>Cronologia di Tutti i Task</Text>
 
       <FlatList 
         data={tasks}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.taskItem}>
-            <Text style={styles.taskText}>{item.text}</Text>
-            <View style={styles.actions}>
-              {/* Trasformata la spunta in un bottone per riattivare il task */}
-              <TouchableOpacity onPress={() => completeTask(item.id)} style={styles.iconButton}>
-                <Ionicons name="checkmark-circle" size={24} color="#34C759" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity onPress={() => deleteTask(item.id)}>
-                <Ionicons name="trash-outline" size={24} color="#ff4444" />
-              </TouchableOpacity>
+        renderItem={({ item }) => {
+          const expired = !item.completed && isTaskExpired(item.date, item.time);
+
+          return (
+            <View style={[
+              styles.taskItem, 
+              item.completed && styles.completedItem, // Sfondo Verde se completato
+              expired && styles.expiredItem          // Sfondo Rosso se scaduto
+            ]}>
+              <View style={styles.taskInfo}>
+                <Text style={[styles.taskText, item.completed && styles.completedText]}>
+                  {item.text}
+                </Text>
+                <Text style={[styles.dateText, item.completed && styles.completedDateText, expired && styles.expiredText]}>
+                  {item.completed ? '✅ Completato il:' : expired ? `⚠️ Scaduto il: ${item.date}` : `📅 Scadenza: ${item.date}`} {item.date} alle {item.time}
+                </Text>
+              </View>
+
+              <View style={styles.actions}>
+                <TouchableOpacity onPress={() => completeTask(item.id)} style={styles.iconButton}>
+                  <Ionicons 
+                    name={item.completed ? "checkmark-circle" : "ellipse-outline"} 
+                    size={24} 
+                    color={item.completed ? "#34C759" : expired ? "#ff8888" : "#2f95dc"} 
+                  />
+                </TouchableOpacity>
+                
+                <TouchableOpacity onPress={() => deleteTask(item.id)}>
+                  <Ionicons name="trash-outline" size={24} color={item.completed || expired ? "#fff" : "#ff4444"} />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Non hai ancora completato nessun task.</Text>
+            <Text style={styles.emptyText}>La lista dei task è vuota.</Text>
           </View>
         }
       />
@@ -45,10 +73,17 @@ export default function OldTaskScreen({ tasks, completeTask, deleteTask }: OldTa
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#161622', padding: 20 },
   title: { fontSize: 22, fontWeight: 'bold', color: '#fff', marginBottom: 20 },
-  taskItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e1e2d', padding: 16, borderRadius: 8, marginBottom: 10, opacity: 0.7 },
-  taskText: { fontSize: 16, color: '#aaa', textDecorationLine: 'line-through', flex: 1, marginRight: 10 },
+  taskItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e1e2d', padding: 16, borderRadius: 8, marginBottom: 10 },
+  completedItem: { backgroundColor: '#1b4d22', borderColor: '#34C759', borderWidth: 1 }, // Sfondo verde scuro
+  expiredItem: { backgroundColor: '#7a1f1f', borderColor: '#ff4444', borderWidth: 1 },    // Sfondo rosso scuro
+  taskInfo: { flex: 1, marginRight: 10 },
+  taskText: { fontSize: 16, color: '#fff' },
+  completedText: { color: '#d1e7dd', textDecorationLine: 'line-through' }, // Testo chiaro sbarrato per il verde
+  dateText: { fontSize: 12, color: '#888', marginTop: 4 },
+  completedDateText: { color: '#a3cfbb' }, // Sottotesto verde chiaro
+  expiredText: { color: '#ffcccc', fontWeight: 'bold' },
   actions: { flexDirection: 'row', alignItems: 'center' },
-  iconButton: { marginRight: 15 }, // Sostituito iconStyle con il margine corretto per il bottone
+  iconButton: { marginRight: 15 },
   emptyContainer: { alignItems: 'center', marginTop: 40 },
   emptyText: { color: '#888', fontSize: 16 }
 });

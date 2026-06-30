@@ -12,11 +12,7 @@ interface HomeScreenProps {
 export default function HomeScreen({ tasks, completeTask, deleteTask }: HomeScreenProps) {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
-
-  // Filtriamo i task di oggi non completati
   const todayTasks = tasks.filter(task => task.date === todayStr && !task.completed);
-
-  // Funzione per verificare se il task è scaduto rispetto a ora
   const isTaskExpired = (taskDate: string, taskTime: string) => {
     const [hours, minutes] = taskTime.split(':').map(Number);
     const taskDateTime = new Date(taskDate);
@@ -36,7 +32,6 @@ export default function HomeScreen({ tasks, completeTask, deleteTask }: HomeScre
           const expired = isTaskExpired(item.date, item.time);
 
           return (
-            // Se è scaduto inseriamo lo stile "expiredItem", altrimenti quello normale
             <View style={[styles.taskItem, expired && styles.expiredItem]}>
               <View style={styles.taskInfo}>
                 <Text style={styles.taskText}>{item.text}</Text>
@@ -71,11 +66,11 @@ const styles = StyleSheet.create({
   welcomeText: { fontSize: 26, fontWeight: 'bold', color: '#fff', marginBottom: 5 },
   subtitle: { fontSize: 16, color: '#888', marginBottom: 25 },
   taskItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e1e2d', padding: 16, borderRadius: 8, marginBottom: 10 },
-  expiredItem: { backgroundColor: '#7a1f1f', borderColor: '#ff4444', borderWidth: 1 }, // Sfondo rosso scuro per i task scaduti
+  expiredItem: { backgroundColor: '#7a1f1f', borderColor: '#ff4444', borderWidth: 1 },
   taskInfo: { flex: 1, marginRight: 10 },
   taskText: { fontSize: 16, color: '#fff', fontWeight: '500' },
   timeText: { fontSize: 13, color: '#888', marginTop: 4 },
-  expiredText: { color: '#ffcccc', fontWeight: 'bold' }, // Testo dell'ora più chiaro/evidente se scaduto
+  expiredText: { color: '#ffcccc', fontWeight: 'bold' },
   actions: { flexDirection: 'row', alignItems: 'center' },
   iconButton: { marginRight: 15 },
   emptyContainer: { alignItems: 'center', marginTop: 50 },
