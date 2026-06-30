@@ -1,36 +1,32 @@
 import React from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Task } from '../App';
+import { useTasks } from '../../context/TaskContext';
 
-interface HomeScreenProps {
-  tasks: Task[];
-  completeTask: (id: string) => void;
-  deleteTask: (id: string) => void;
-}
-
-export default function HomeScreen({ tasks, completeTask, deleteTask }: HomeScreenProps) {
+export default function HomeScreen() {
+  const { tasks, completeTask, deleteTask } = useTasks();
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+
   const todayTasks = tasks.filter(task => task.date === todayStr && !task.completed);
+
   const isTaskExpired = (taskDate: string, taskTime: string) => {
+    const [year, month, day] = taskDate.split('-').map(Number);
     const [hours, minutes] = taskTime.split(':').map(Number);
-    const taskDateTime = new Date(taskDate);
-    taskDateTime.setHours(hours, minutes, 0, 0);
+    const taskDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
     return now > taskDateTime;
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.welcomeText}>👋 Buongiorno!</Text>
-      <Text style={styles.subtitle}>Ecco i tuoi impegni per la giornata di oggi:</Text>
+      <Text style={styles.welcomeText}>👋 Dashboard</Text>
+      <Text style={styles.subtitle}>I tuoi impegni per la giornata di oggi:</Text>
 
       <FlatList 
         data={todayTasks}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
           const expired = isTaskExpired(item.date, item.time);
-
           return (
             <View style={[styles.taskItem, expired && styles.expiredItem]}>
               <View style={styles.taskInfo}>
@@ -53,7 +49,7 @@ export default function HomeScreen({ tasks, completeTask, deleteTask }: HomeScre
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="sunny-outline" size={48} color="#FFCC00" style={{ marginBottom: 10 }} />
-            <Text style={styles.emptyText}>Nessun task programmato per oggi. Rilassati!</Text>
+            <Text style={styles.emptyText}>Nessun task programmato per oggi.</Text>
           </View>
         }
       />
@@ -62,7 +58,7 @@ export default function HomeScreen({ tasks, completeTask, deleteTask }: HomeScre
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#161622', padding: 20 },
+  container: { flex: 1, backgroundColor: '#161622', padding: 20, paddingTop: 60 },
   welcomeText: { fontSize: 26, fontWeight: 'bold', color: '#fff', marginBottom: 5 },
   subtitle: { fontSize: 16, color: '#888', marginBottom: 25 },
   taskItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e1e2d', padding: 16, borderRadius: 8, marginBottom: 10 },
@@ -74,5 +70,5 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center' },
   iconButton: { marginRight: 15 },
   emptyContainer: { alignItems: 'center', marginTop: 50 },
-  emptyText: { color: '#888', fontSize: 16, textAlign: 'center' }
+  emptyText: { color: '#888', fontSize: 16 }
 });

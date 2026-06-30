@@ -1,15 +1,10 @@
 import React from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Task } from '../App';
+import { useTasks } from '../../context/TaskContext';
 
-interface OldTaskProps {
-  tasks: Task[];
-  completeTask: (id: string) => void;
-  deleteTask: (id: string) => void;
-}
-
-export default function OldTaskScreen({ tasks, completeTask, deleteTask }: OldTaskProps) {
+export default function OldTaskScreen() {
+  const { tasks, completeTask, deleteTask } = useTasks();
   const now = new Date();
 
   const isTaskExpired = (taskDate: string, taskTime: string) => {
@@ -21,7 +16,7 @@ export default function OldTaskScreen({ tasks, completeTask, deleteTask }: OldTa
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Cronologia di Tutti i Task</Text>
+      <Text style={styles.title}>Cronologia Globale</Text>
 
       <FlatList 
         data={tasks}
@@ -32,8 +27,8 @@ export default function OldTaskScreen({ tasks, completeTask, deleteTask }: OldTa
           return (
             <View style={[
               styles.taskItem, 
-              item.completed && styles.completedItem, // Sfondo Verde se completato
-              expired && styles.expiredItem          // Sfondo Rosso se scaduto
+              item.completed && styles.completedItem,
+              expired && styles.expiredItem
             ]}>
               <View style={styles.taskInfo}>
                 <Text style={[styles.taskText, item.completed && styles.completedText]}>
@@ -52,38 +47,30 @@ export default function OldTaskScreen({ tasks, completeTask, deleteTask }: OldTa
                     color={item.completed ? "#34C759" : expired ? "#ff8888" : "#2f95dc"} 
                   />
                 </TouchableOpacity>
-                
                 <TouchableOpacity onPress={() => deleteTask(item.id)}>
-                  <Ionicons name="trash-outline" size={24} color={item.completed || expired ? "#fff" : "#ff4444"} />
+                  <Ionicons name="trash-outline" size={24} color="#ff4444" />
                 </TouchableOpacity>
               </View>
             </View>
           );
         }}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>La lista dei task è vuota.</Text>
-          </View>
-        }
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#161622', padding: 20 },
+  container: { flex: 1, backgroundColor: '#161622', padding: 20, paddingTop: 60 },
   title: { fontSize: 22, fontWeight: 'bold', color: '#fff', marginBottom: 20 },
   taskItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e1e2d', padding: 16, borderRadius: 8, marginBottom: 10 },
-  completedItem: { backgroundColor: '#1b4d22', borderColor: '#34C759', borderWidth: 1 }, // Sfondo verde scuro
-  expiredItem: { backgroundColor: '#7a1f1f', borderColor: '#ff4444', borderWidth: 1 },    // Sfondo rosso scuro
+  completedItem: { backgroundColor: '#1b4d22', borderColor: '#34C759', borderWidth: 1 },
+  expiredItem: { backgroundColor: '#7a1f1f', borderColor: '#ff4444', borderWidth: 1 },
   taskInfo: { flex: 1, marginRight: 10 },
   taskText: { fontSize: 16, color: '#fff' },
-  completedText: { color: '#d1e7dd', textDecorationLine: 'line-through' }, // Testo chiaro sbarrato per il verde
+  completedText: { color: '#d1e7dd', textDecorationLine: 'line-through' },
   dateText: { fontSize: 12, color: '#888', marginTop: 4 },
-  completedDateText: { color: '#a3cfbb' }, // Sottotesto verde chiaro
+  completedDateText: { color: '#a3cfbb' },
   expiredText: { color: '#ffcccc', fontWeight: 'bold' },
   actions: { flexDirection: 'row', alignItems: 'center' },
-  iconButton: { marginRight: 15 },
-  emptyContainer: { alignItems: 'center', marginTop: 40 },
-  emptyText: { color: '#888', fontSize: 16 }
+  iconButton: { marginRight: 15 }
 });
