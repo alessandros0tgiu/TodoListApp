@@ -1,27 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import HomeScreen from './app/home';
 import NewTaskScreen from './app/newtask';
 import OldTaskScreen from './app/oldtask';
 
-// 1. Aggiornata l'interfaccia Task con data e ora
 export interface Task {
   id: string;
   text: string;
   completed: boolean;
-  date: string; // Formato AAAA-MM-GG
-  time: string; // Formato HH:MM
+  date: string; 
+  time: string; 
 }
 
 const Tab = createBottomTabNavigator();
+const STORAGE_KEY = '@todo_tasks_storage';
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
 
-  // 2. addTask ora accetta anche date e time
+  useEffect(() => {
+    const loadTasks = async () => {
+      try {
+        const savedTasks = await AsyncStorage.getItem(STORAGE_KEY);
+        if (savedTasks !== null) {
+          setTasks(JSON.parse(savedTasks));
+        }
+      } catch (error) {
+        console.error("Errore nel caricamento dei task:", error);
+      }
+    };
+    loadTasks();
+  }, []);
+
+  useEffect(() => {
+    const saveTasks = async () => {
+      try {
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      } catch (error) {
+        console.error("Errore nel salvataggio dei task:", error);
+      }
+    };
+    saveTasks();
+  }, [tasks]);
+
   const addTask = (text: string, date: string, time: string) => {
     if (text.trim() === '') return;
     setTasks([...tasks, { 
@@ -34,7 +59,7 @@ export default function App() {
   };
 
   const completeTask = (id: string) => {
-    setTasks(tasks.map(task => task.id === id ? { ...task, completed: true } : task));
+    setTasks(tasks.map(task => task.id === id ? { ...task, completed: !task.completed } : task));
   };
 
   const deleteTask = (id: string) => {
@@ -60,7 +85,6 @@ export default function App() {
           headerTitleStyle: { fontWeight: 'bold' },
         })}
       >
-        {/* 3. Passiamo i task e le funzioni anche alla Home */}
         <Tab.Screen name="Home">
           {(props) => (
             <HomeScreen 
@@ -89,6 +113,7 @@ export default function App() {
             <OldTaskScreen 
               {...props}
               tasks={tasks.filter(t => t.completed)} 
+              completeTask={completeTask}
               deleteTask={deleteTask}
             />
           )}

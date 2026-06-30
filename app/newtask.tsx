@@ -13,27 +13,30 @@ interface NewTaskProps {
 
 export default function NewTaskScreen({ tasks, addTask, completeTask, deleteTask }: NewTaskProps) {
   const [text, setText] = useState('');
-  
-  // Stati per gestire l'oggetto Data di JavaScript
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  // Formatta la data in stringa AAAA-MM-GG per il database/stato
+  const now = new Date();
+
   const formatDateString = (date: Date) => date.toISOString().split('T')[0];
   
-  // Formatta l'ora in stringa HH:MM
   const formatTimeString = (date: Date) => {
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
   };
 
+  const isTaskExpired = (taskDate: string, taskTime: string) => {
+    const [hours, minutes] = taskTime.split(':').map(Number);
+    const taskDateTime = new Date(taskDate);
+    taskDateTime.setHours(hours, minutes, 0, 0);
+    return now > taskDateTime;
+  };
+
   const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    // Nasconde il picker su Android dopo la selezione
     if (Platform.OS === 'android') setShowDatePicker(false); 
     if (selectedDate) {
-      // Conserviamo l'ora attuale ma cambiamo il giorno
       const updatedDate = new Date(currentDate);
       updatedDate.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
       setCurrentDate(updatedDate);
@@ -43,7 +46,6 @@ export default function NewTaskScreen({ tasks, addTask, completeTask, deleteTask
   const onTimeChange = (event: DateTimePickerEvent, selectedTime?: Date) => {
     if (Platform.OS === 'android') setShowTimePicker(false);
     if (selectedTime) {
-      // Conserviamo il giorno attuale ma cambiamo l'ora
       const updatedDate = new Date(currentDate);
       updatedDate.setHours(selectedTime.getHours(), selectedTime.getMinutes());
       setCurrentDate(updatedDate);
@@ -52,11 +54,7 @@ export default function NewTaskScreen({ tasks, addTask, completeTask, deleteTask
 
   const handleAdd = () => {
     if (text.trim() === '') return;
-    
-    const finalDateStr = formatDateString(currentDate);
-    const finalTimeStr = formatTimeString(currentDate);
-
-    addTask(text, finalDateStr, finalTimeStr);
+    addTask(text, formatDateString(currentDate), formatTimeString(currentDate));
     setText('');
   };
 
@@ -74,7 +72,6 @@ export default function NewTaskScreen({ tasks, addTask, completeTask, deleteTask
         />
         
         <View style={styles.rowInputs}>
-          {/* Pulsante Seleziona Data */}
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>Scadenza Giorno</Text>
             <TouchableOpacity style={styles.pickerButton} onPress={() => setShowDatePicker(true)}>
@@ -83,7 +80,6 @@ export default function NewTaskScreen({ tasks, addTask, completeTask, deleteTask
             </TouchableOpacity>
           </View>
 
-          {/* Pulsante Seleziona Ora */}
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>Scadenza Ora</Text>
             <TouchableOpacity style={styles.pickerButton} onPress={() => setShowTimePicker(true)}>
@@ -93,18 +89,16 @@ export default function NewTaskScreen({ tasks, addTask, completeTask, deleteTask
           </View>
         </View>
 
-        {/* Componente Calendario (Visibile solo al click) */}
         {showDatePicker && (
           <DateTimePicker
             value={currentDate}
             mode="date"
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={onDateChange}
-            themeVariant="dark" // Forza il tema scuro su iOS
+            themeVariant="dark"
           />
         )}
 
-        {/* Componente Orologio (Visibile solo al click) */}
         {showTimePicker && (
           <DateTimePicker
             value={currentDate}
@@ -116,7 +110,6 @@ export default function NewTaskScreen({ tasks, addTask, completeTask, deleteTask
           />
         )}
 
-        {/* Se siamo su iOS, aggiungiamo dei piccoli bottoni di chiusura se visualizzati come spinner */}
         {(Platform.OS === 'ios' && (showDatePicker || showTimePicker)) && (
           <TouchableOpacity 
             style={styles.closePickerBtn} 
@@ -136,22 +129,28 @@ export default function NewTaskScreen({ tasks, addTask, completeTask, deleteTask
       <FlatList 
         data={tasks}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.taskItem}>
-            <View style={styles.taskInfo}>
-              <Text style={styles.taskText}>{item.text}</Text>
-              <Text style={styles.dateText}>📅 {item.date} alle {item.time}</Text>
+        renderItem={({ item }) => {
+          const expired = isTaskExpired(item.date, item.time);
+
+          return (
+            <View style={[styles.taskItem, expired && styles.expiredItem]}>
+              <View style={styles.taskInfo}>
+                <Text style={styles.taskText}>{item.text}</Text>
+                <Text style={[styles.dateText, expired && styles.expiredText]}>
+                  ⚠️ Scaduto il: {item.date} alle {item.time}
+                </Text>
+              </View>
+              <View style={styles.actions}>
+                <TouchableOpacity onPress={() => completeTask(item.id)} style={styles.iconButton}>
+                  <Ionicons name="ellipse-outline" size={24} color={expired ? '#ff8888' : '#2f95dc'} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => deleteTask(item.id)}>
+                  <Ionicons name="trash-outline" size={24} color={expired ? '#fff' : '#ff4444'} />
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.actions}>
-              <TouchableOpacity onPress={() => completeTask(item.id)} style={styles.iconButton}>
-                <Ionicons name="ellipse-outline" size={24} color="#2f95dc" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => deleteTask(item.id)}>
-                <Ionicons name="trash-outline" size={24} color="#ff4444" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>Nessuna task attiva. Ottimo lavoro!</Text>
@@ -178,9 +177,11 @@ const styles = StyleSheet.create({
   addButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff', marginBottom: 15 },
   taskItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e1e2d', padding: 14, borderRadius: 8, marginBottom: 10 },
+  expiredItem: { backgroundColor: '#7a1f1f', borderColor: '#ff4444', borderWidth: 1 },
   taskInfo: { flex: 1, marginRight: 10 },
   taskText: { fontSize: 16, color: '#fff' },
   dateText: { fontSize: 12, color: '#888', marginTop: 3 },
+  expiredText: { color: '#ffcccc', fontWeight: 'bold' },
   actions: { flexDirection: 'row', alignItems: 'center' },
   iconButton: { marginRight: 15 },
   emptyContainer: { alignItems: 'center', marginTop: 20 },
