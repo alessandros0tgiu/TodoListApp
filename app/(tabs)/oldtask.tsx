@@ -16,7 +16,7 @@ export default function OldTaskScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Cronologia Globale</Text>
+      <Text style={styles.title}>Tutti i Task</Text>
 
       <FlatList 
         data={tasks}

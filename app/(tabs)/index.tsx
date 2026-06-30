@@ -19,7 +19,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.welcomeText}>👋 Dashboard</Text>
+      <Text style={styles.welcomeText}>Dashboard</Text>
       <Text style={styles.subtitle}>I tuoi impegni per la giornata di oggi:</Text>
 
       <FlatList 

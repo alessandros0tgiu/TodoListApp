@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Platform } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useTasks } from '../../context/TaskContext';
@@ -51,7 +51,16 @@ export default function NewTaskScreen() {
   };
 
   const handleAdd = () => {
-    if (text.trim() === '') return;
+    // Controllo se il testo è vuoto o contiene solo spazi
+    if (text.trim() === '') {
+      Alert.alert(
+        'Attenzione',
+        'Non puoi aggiungere un task vuoto. Inserisci una descrizione valida!',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
     addTask(text, formatDateString(currentDate), formatTimeString(currentDate));
     setText('');
   };
