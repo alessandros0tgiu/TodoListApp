@@ -1,18 +1,28 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTasks, TaskCategory } from '../../context/TaskContext';
-import { categoryColors } from './newtask';
+import { useTasks, TaskCategory, TaskPriority } from '../../context/TaskContext';
+import { categoryColors, priorityColors } from './newtask';
+
+type OrderType = 'Data' | 'Priorità' | 'Alfabetico';
 
 export default function OldTaskScreen() {
-  const { tasks, completeTask, deleteTask } = useTasks();
+  const { tasks, completeTask, deleteTask, toggleSubTask, addSubTask, deleteSubTask } = useTasks();
   const now = new Date();
 
+  // Stati locali per filtri, ricerca e ordinamento
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<TaskCategory | 'Tutti'>('Tutti');
+  const [currentOrder, setCurrentOrder] = useState<OrderType>('Data');
+  
+  // NUOVO: Stato per mostrare/nascondere il pannello di ordinamento (Toggle)
+  const [showOrderMenu, setShowOrderMenu] = useState(false);
 
-  // Converte le stringhe del database (date e time) in un oggetto data reale e lo confronta con il millisecondo attuale.
-  // Ritorna true se il momento attuale (now) ha superato la data di scadenza dell'impegno.
+  // Gestione dell'ID del task attualmente espanso per vedere i sotto-task
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [newSubTaskText, setNewSubTaskText] = useState('');
+
+  // Funzione di calcolo scadenza
   const isTaskExpired = (taskDate: string, taskTime: string) => {
     const [year, month, day] = taskDate.split('-').map(Number);
     const [hours, minutes] = taskTime.split(':').map(Number);
@@ -20,32 +30,98 @@ export default function OldTaskScreen() {
     return now > taskDateTime;
   };
 
-  // Esegue un filtraggio in tempo reale sull'array globale dei task applicando due condizioni:
-  const filteredTasks = tasks.filter(task => {
-    // 1. Condizione di ricerca: controlla se il testo scritto dall'utente è incluso nella descrizione del task (ignorando maiuscole/minuscole)
-    const matchesSearch = task.text.toLowerCase().includes(searchQuery.toLowerCase());
-    // 2. Condizione di categoria: controlla se il filtro attivo è impostato su 'Tutti' oppure se coincide con la categoria del task
-    const matchesFilter = selectedFilter === 'Tutti' || task.category === selectedFilter;
+  const toggleExpand = (id: string) => {
+    if (expandedTaskId === id) {
+      setExpandedTaskId(null);
+      setNewSubTaskText('');
+    } else {
+      setExpandedTaskId(id);
+    }
+  };
 
-    // Il compito viene mantenuto nell'elenco visibile solo se supera ENTRAMBI i controlli contemporaneamente
+  const handleCreateSubTask = (taskId: string) => {
+    if (newSubTaskText.trim() === '') return;
+    addSubTask(taskId, newSubTaskText.trim());
+    setNewSubTaskText('');
+  };
+
+  // 1. APPLICAZIONE FILTRI DI RICERCA E CATEGORIA
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = task.text.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = selectedFilter === 'Tutti' || task.category === selectedFilter;
     return matchesSearch && matchesFilter;
+  });
+
+  // 2. APPLICAZIONE LOGICA DI ORDINAMENTO SELEZIONATA
+  const priorityWeight: Record<TaskPriority, number> = { Alta: 3, Media: 2, Bassa: 1 };
+
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    if (currentOrder === 'Priorità') {
+      if (priorityWeight[a.priority] !== priorityWeight[b.priority]) {
+        return priorityWeight[b.priority] - priorityWeight[a.priority];
+      }
+    }
+    if (currentOrder === 'Alfabetico') {
+      return a.text.localeCompare(b.text);
+    }
+    const dateTimeA = new Date(`${a.date}T${a.time}:00`);
+    const dateTimeB = new Date(`${b.date}T${b.time}:00`);
+    return dateTimeA.getTime() - dateTimeB.getTime();
   });
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Tutti i Task</Text>
 
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={20} color="#888" style={{ marginRight: 8 }} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Cerca tra tutti i tuoi impegni..."
-          placeholderTextColor="#666"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+      {/* BARRA DI RICERCA + PULSANTE 3 LINEE (MENU) */}
+      <View style={styles.headerActionsRow}>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search-outline" size={20} color="#888" style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Cerca impegni..."
+            placeholderTextColor="#666"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+        
+        {/* Pulsante con le 3 linee (Menu di ordinamento) */}
+        <TouchableOpacity 
+          style={[styles.menuButton, showOrderMenu && styles.menuButtonActive]} 
+          onPress={() => setShowOrderMenu(!showOrderMenu)}
+        >
+          <Ionicons name="options-outline" size={22} color={showOrderMenu ? "#fff" : "#888"} />
+        </TouchableOpacity>
       </View>
 
+      {/* PANNELLO DI ORDINAMENTO A SCOMPARSA (Compare solo se premi le 3 linee) */}
+      {showOrderMenu && (
+        <View style={styles.dropdownPanel}>
+          <Text style={styles.sectionLabel}>Ordina l'elenco per:</Text>
+          <View style={styles.filterRow}>
+            {(['Data', 'Priorità', 'Alfabetico'] as OrderType[]).map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[
+                  styles.orderOptionButton,
+                  currentOrder === type && styles.orderButtonSelected
+                ]}
+                onPress={() => {
+                  setCurrentOrder(type);
+                  setShowOrderMenu(false); // Chiude il menu dopo la selezione per fare spazio
+                }}
+              >
+                <Text style={[styles.filterButtonText, currentOrder === type && styles.filterButtonTextSelected]}>
+                  {type === 'Data' ? '📅 Scadenza' : type === 'Priorità' ? '🔥 Priorità' : '🔤 Alfabetico'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* FILTRI CATEGORIA STATICI (Sempre comodi e compatti) */}
       <View style={styles.filterRow}>
         {(['Tutti', 'Personale', 'Lavoro', 'Studio', 'Spesa'] as const).map((filter) => (
           <TouchableOpacity
@@ -63,52 +139,100 @@ export default function OldTaskScreen() {
         ))}
       </View>
 
+      {/* LISTA DEI TASK */}
       <FlatList
-        data={filteredTasks}
+        data={sortedTasks}
         keyExtractor={(item) => item.id}
+        style={{ marginTop: 5 }}
         renderItem={({ item }) => {
           const expired = !item.completed && isTaskExpired(item.date, item.time);
+          const isExpanded = expandedTaskId === item.id;
 
           return (
-            <View style={[
-              styles.taskItem,
-              item.completed && styles.completedItem,
-              expired && styles.expiredItem
-            ]}>
-              <View style={styles.taskInfo}>
-                <View style={styles.taskTextRow}>
-                  <View style={[
-                    styles.miniIndicator,
-                    { backgroundColor: item.category ? categoryColors[item.category] : '#888' }
-                  ]} />
-                  <Text style={[styles.taskText, item.completed && styles.completedText]}>
-                    {item.text}
+            <View style={styles.taskWrapper}>
+              <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={() => toggleExpand(item.id)}
+                style={[
+                  styles.taskItem,
+                  item.completed && styles.completedItem,
+                  expired && styles.expiredItem
+                ]}
+              >
+                <View style={styles.taskInfo}>
+                  <View style={styles.taskTextRow}>
+                    <View style={[
+                      styles.miniIndicator,
+                      { backgroundColor: item.category ? categoryColors[item.category] : '#888' }
+                    ]} />
+                    <Text style={[styles.taskText, item.completed && styles.completedText]}>
+                      {item.text}
+                    </Text>
+                    <Text style={[styles.priorityTag, { color: priorityColors[item.priority] }]}>
+                      • {item.priority}
+                    </Text>
+                  </View>
+
+                  <Text style={[styles.dateText, item.completed && styles.completedDateText, expired && styles.expiredText]}>
+                    {item.completed ? '✅ Completato' : expired ? '⚠️ Scaduto il:' : '📅 Scadenza:'} {item.date} alle {item.time}
                   </Text>
                 </View>
 
-                {/* Testo secondario che cambia dicitura e icone a seconda che il task sia completato, scaduto o attivo */}
-                <Text style={[styles.dateText, item.completed && styles.completedDateText, expired && styles.expiredText]}>
-                  {item.completed ? '✅ Completato' : expired ? '⚠️ Scaduto il:' : '📅 Scadenza:'} {item.date} alle {item.time}
-                </Text>
-              </View>
+                <View style={styles.actions}>
+                  <TouchableOpacity onPress={() => completeTask(item.id)} style={styles.iconButton}>
+                    <Ionicons
+                      name={item.completed ? "checkmark-circle" : "ellipse-outline"}
+                      size={24}
+                      color={item.completed ? "#34C759" : expired ? "#ff8888" : "#2f95dc"}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => deleteTask(item.id)}>
+                    <Ionicons name="trash-outline" size={24} color="#ff4444" />
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
 
-              <View style={styles.actions}>
-                <TouchableOpacity onPress={() => completeTask(item.id)} style={styles.iconButton}>
-                  <Ionicons
-                    name={item.completed ? "checkmark-circle" : "ellipse-outline"}
-                    size={24}
-                    color={item.completed ? "#34C759" : expired ? "#ff8888" : "#2f95dc"}
-                  />
-                </TouchableOpacity>
-                {/* Pulsante Cestino: al click rimuove definitivamente il task dalla memoria */}
-                <TouchableOpacity onPress={() => deleteTask(item.id)}>
-                  <Ionicons name="trash-outline" size={24} color="#ff4444" />
-                </TouchableOpacity>
-              </View>
+              {/* SEZIONE SOTTO-TASK */}
+              {isExpanded && (
+                <View style={styles.subTaskSection}>
+                  <Text style={styles.subSectionTitle}>📋 Checklist Sotto-task:</Text>
+                  
+                  {item.subTasks?.map((sub) => (
+                    <View key={sub.id} style={styles.subTaskItem}>
+                      <TouchableOpacity style={styles.subCheckRow} onPress={() => toggleSubTask(item.id, sub.id)}>
+                        <Ionicons 
+                          name={sub.completed ? "checkbox" : "square-outline"} 
+                          size={18} 
+                          color={sub.completed ? "#34C759" : "#888"} 
+                        />
+                        <Text style={[styles.subTaskText, sub.completed && styles.subTaskTextCompleted]}>
+                          {sub.text}
+                        </Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity onPress={() => deleteSubTask(item.id, sub.id)}>
+                        <Ionicons name="close-circle-outline" size={18} color="#ff4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+
+                  <View style={styles.subTaskInputRow}>
+                    <TextInput
+                      style={styles.subTaskInput}
+                      placeholder="Aggiungi micro-obiettivo..."
+                      placeholderTextColor="#555"
+                      value={newSubTaskText}
+                      onChangeText={setNewSubTaskText}
+                    />
+                    <TouchableOpacity style={styles.subTaskAddBtn} onPress={() => handleCreateSubTask(item.id)}>
+                      <Ionicons name="add" size={18} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </View>
           );
         }}
-        // INTERFACCIA DI ELENCO VUOTO
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>Nessun task trovato con questi filtri.</Text>
@@ -122,26 +246,52 @@ export default function OldTaskScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#161622', padding: 20, paddingTop: 60 },
   title: { fontSize: 22, fontWeight: 'bold', color: '#fff', marginBottom: 20 },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e1e2d', paddingHorizontal: 12, borderRadius: 8, marginBottom: 12, height: 45 },
+  
+  // Layout riga superiore di ricerca e menu
+  headerActionsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  searchContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e1e2d', paddingHorizontal: 12, borderRadius: 8, height: 45 },
   searchInput: { flex: 1, color: '#fff', fontSize: 15 },
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 20 },
+  menuButton: { width: 45, height: 45, backgroundColor: '#1e1e2d', borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  menuButtonActive: { backgroundColor: '#e67e22' },
+
+  // Pannello Dropdown a comparsa nascosto
+  dropdownPanel: { backgroundColor: '#1e1e2d', padding: 12, borderRadius: 8, marginBottom: 14, borderWidth: 1, borderColor: '#2a2a3a' },
+  sectionLabel: { color: '#888', fontSize: 12, fontWeight: 'bold', marginBottom: 8, marginLeft: 2 },
+  
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
   filterButton: { backgroundColor: '#1e1e2d', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 15 },
   filterButtonSelected: { backgroundColor: '#2f95dc' },
+  orderOptionButton: { backgroundColor: '#161622', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8 },
+  orderButtonSelected: { backgroundColor: '#e67e22' },
   filterButtonText: { color: '#888', fontSize: 12, fontWeight: '600' },
   filterButtonTextSelected: { color: '#fff' },
-  taskItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e1e2d', padding: 16, borderRadius: 8, marginBottom: 10 },
+
+  taskWrapper: { marginBottom: 12, backgroundColor: '#1e1e2d', borderRadius: 8, overflow: 'hidden' },
+  taskItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
   completedItem: { backgroundColor: '#1b4d22', borderColor: '#34C759', borderWidth: 1 },
   expiredItem: { backgroundColor: '#7a1f1f', borderColor: '#ff4444', borderWidth: 1 },
   taskInfo: { flex: 1, marginRight: 10 },
-  taskTextRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  taskTextRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' },
   miniIndicator: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
-  taskText: { fontSize: 16, color: '#fff' },
+  taskText: { fontSize: 16, color: '#fff', fontWeight: '500' },
+  priorityTag: { fontSize: 12, fontWeight: 'bold', marginLeft: 6 },
   completedText: { color: '#d1e7dd', textDecorationLine: 'line-through' },
   dateText: { fontSize: 12, color: '#888', marginTop: 4 },
   completedDateText: { color: '#a3cfbb' },
   expiredText: { color: '#ffcccc', fontWeight: 'bold' },
   actions: { flexDirection: 'row', alignItems: 'center' },
   iconButton: { marginRight: 15 },
+  
+  subTaskSection: { backgroundColor: '#161622', padding: 12, borderTopWidth: 1, borderTopColor: '#2a2a3a', marginLeft: 10, marginRight: 10, marginBottom: 10, borderRadius: 6 },
+  subSectionTitle: { color: '#aaa', fontSize: 12, fontWeight: 'bold', marginBottom: 8 },
+  subTaskItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: '#222' },
+  subCheckRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  subTaskText: { color: '#eee', fontSize: 14 },
+  subTaskTextCompleted: { color: '#666', textDecorationLine: 'line-through' },
+  subTaskInputRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 8 },
+  subTaskInput: { flex: 1, backgroundColor: '#1e1e2d', color: '#fff', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 4, fontSize: 13 },
+  subTaskAddBtn: { backgroundColor: '#2f95dc', width: 32, height: 32, borderRadius: 4, justifyContent: 'center', alignItems: 'center' },
+
   emptyContainer: { alignItems: 'center', marginTop: 30 },
   emptyText: { color: '#888', fontSize: 14 }
 });
