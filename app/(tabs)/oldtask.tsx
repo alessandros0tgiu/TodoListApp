@@ -11,6 +11,8 @@ export default function OldTaskScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<TaskCategory | 'Tutti'>('Tutti');
 
+  // Converte le stringhe del database (date e time) in un oggetto data reale e lo confronta con il millisecondo attuale.
+  // Ritorna true se il momento attuale (now) ha superato la data di scadenza dell'impegno.
   const isTaskExpired = (taskDate: string, taskTime: string) => {
     const [year, month, day] = taskDate.split('-').map(Number);
     const [hours, minutes] = taskTime.split(':').map(Number);
@@ -18,9 +20,14 @@ export default function OldTaskScreen() {
     return now > taskDateTime;
   };
 
+  // Esegue un filtraggio in tempo reale sull'array globale dei task applicando due condizioni:
   const filteredTasks = tasks.filter(task => {
+    // 1. Condizione di ricerca: controlla se il testo scritto dall'utente è incluso nella descrizione del task (ignorando maiuscole/minuscole)
     const matchesSearch = task.text.toLowerCase().includes(searchQuery.toLowerCase());
+    // 2. Condizione di categoria: controlla se il filtro attivo è impostato su 'Tutti' oppure se coincide con la categoria del task
     const matchesFilter = selectedFilter === 'Tutti' || task.category === selectedFilter;
+
+    // Il compito viene mantenuto nell'elenco visibile solo se supera ENTRAMBI i controlli contemporaneamente
     return matchesSearch && matchesFilter;
   });
 
@@ -79,6 +86,7 @@ export default function OldTaskScreen() {
                   </Text>
                 </View>
 
+                {/* Testo secondario che cambia dicitura e icone a seconda che il task sia completato, scaduto o attivo */}
                 <Text style={[styles.dateText, item.completed && styles.completedDateText, expired && styles.expiredText]}>
                   {item.completed ? '✅ Completato' : expired ? '⚠️ Scaduto il:' : '📅 Scadenza:'} {item.date} alle {item.time}
                 </Text>
@@ -92,6 +100,7 @@ export default function OldTaskScreen() {
                     color={item.completed ? "#34C759" : expired ? "#ff8888" : "#2f95dc"}
                   />
                 </TouchableOpacity>
+                {/* Pulsante Cestino: al click rimuove definitivamente il task dalla memoria */}
                 <TouchableOpacity onPress={() => deleteTask(item.id)}>
                   <Ionicons name="trash-outline" size={24} color="#ff4444" />
                 </TouchableOpacity>
@@ -99,6 +108,7 @@ export default function OldTaskScreen() {
             </View>
           );
         }}
+        // INTERFACCIA DI ELENCO VUOTO
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>Nessun task trovato con questi filtri.</Text>

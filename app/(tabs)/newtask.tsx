@@ -13,21 +13,25 @@ export const categoryColors: Record<TaskCategory, string> = {
 
 export default function NewTaskScreen() {
   const { tasks, addTask, completeTask, deleteTask } = useTasks();
+  // Memorizzano le scelte temporanee che l'utente fa sullo schermo prima di premere "Aggiungi Task".
   const [text, setText] = useState('');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [category, setCategory] = useState<TaskCategory>('Personale');
 
+  // Prende la lista di tutti i compiti dell'app e isola esclusivamente quelli che NON sono completati.
   const activeTasks = tasks.filter(t => !t.completed);
+
   const formatDateString = (date: Date) => date.toISOString().split('T')[0];
-  
+
   const formatTimeString = (date: Date) => {
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
   };
 
+  // FUNZIONE DI VERIFICA SCADENZA
   const isTaskExpired = (taskDate: string, taskTime: string) => {
     const now = new Date();
     const [year, month, day] = taskDate.split('-').map(Number);
@@ -37,7 +41,7 @@ export default function NewTaskScreen() {
   };
 
   const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (Platform.OS === 'android') setShowDatePicker(false); 
+    if (Platform.OS === 'android') setShowDatePicker(false);
     if (selectedDate) {
       const updatedDate = new Date(currentDate);
       updatedDate.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
@@ -59,6 +63,7 @@ export default function NewTaskScreen() {
   };
 
   const handleAdd = () => {
+    // Se l'utente non ha scritto nulla, mostra una finestra di avviso (Alert) e blocca il salvataggio
     if (text.trim() === '') {
       Alert.alert(
         'Attenzione',
@@ -67,12 +72,13 @@ export default function NewTaskScreen() {
       );
       return;
     }
-    
+
+    // Se il testo è valido, invia i dati formattati al contesto globale per aggiungerli alla memoria del telefono
     addTask(text, formatDateString(currentDate), formatTimeString(currentDate), category);
     setText('');
   };
 
-  // Qui la lista mostra semplicemente i compiti attivi ordinati per scadenza
+  // La lista mostra semplicemente i compiti attivi ordinati per scadenza
   const sortedTasks = activeTasks.sort((a, b) => {
     const dateTimeA = new Date(`${a.date}T${a.time}:00`);
     const dateTimeB = new Date(`${b.date}T${b.time}:00`);
@@ -87,11 +93,11 @@ export default function NewTaskScreen() {
       ListHeaderComponent={
         <>
           <Text style={styles.title}>Aggiungi un impegno</Text>
-          
+
           <View style={styles.formContainer}>
-            <TextInput 
-              style={styles.input} 
-              placeholder="Scrivi qui cosa devi fare..." 
+            <TextInput
+              style={styles.input}
+              placeholder="Scrivi qui cosa devi fare..."
               placeholderTextColor="#666"
               value={text}
               onChangeText={setText}
@@ -113,7 +119,7 @@ export default function NewTaskScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            
+
             <View style={styles.rowInputs}>
               <View style={styles.inputWrapper}>
                 <Text style={styles.label}>Scadenza Giorno</Text>
@@ -154,8 +160,8 @@ export default function NewTaskScreen() {
             )}
 
             {Platform.OS === 'ios' && (showDatePicker || showTimePicker) && (
-              <TouchableOpacity 
-                style={styles.closePickerBtn} 
+              <TouchableOpacity
+                style={styles.closePickerBtn}
                 onPress={() => { setShowDatePicker(false); setShowTimePicker(false); }}
               >
                 <Text style={styles.closePickerTxt}>Conferma Orario/Data</Text>
@@ -178,9 +184,12 @@ export default function NewTaskScreen() {
           <Text style={styles.sectionTitle}>I tuoi compiti attivi</Text>
         </>
       }
+
       renderItem={({ item }) => {
+        // Calcola se questo compito specifico ha superato l'orario massimo
         const expired = isTaskExpired(item.date, item.time);
         return (
+          // Se il compito è scaduto, aggiunge una classe di stile "expiredItem" che colora lo sfondo di rosso scuro
           <View style={[styles.taskItem, expired && styles.expiredItem]}>
             <View style={styles.taskInfo}>
               <View style={styles.taskTextRow}>
@@ -191,6 +200,7 @@ export default function NewTaskScreen() {
                 {expired ? `⚠️ Scaduto il: ${item.date}` : `📅 Scadenza: ${item.date}`} alle {item.time}
               </Text>
             </View>
+
             <View style={styles.actions}>
               <TouchableOpacity onPress={() => completeTask(item.id)} style={styles.iconButton}>
                 <Ionicons name="ellipse-outline" size={24} color={expired ? '#ff8888' : '#2f95dc'} />
@@ -202,6 +212,7 @@ export default function NewTaskScreen() {
           </View>
         );
       }}
+
       ListEmptyComponent={
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>Ancora nessun impegno attivo aggiunto.</Text>
