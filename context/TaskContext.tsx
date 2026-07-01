@@ -2,7 +2,6 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type TaskCategory = 'Personale' | 'Lavoro' | 'Studio' | 'Spesa';
-// Per gestire i tre livelli di priorità richieste
 export type TaskPriority = 'Alta' | 'Media' | 'Bassa';
 
 export interface SubTask {
@@ -20,13 +19,18 @@ export interface Task {
   category: TaskCategory;
   priority: TaskPriority;
   subTasks: SubTask[];
+  // AGGIUNTO: Campi obbligatori per la gestione del Cestino
+  deleted: boolean;
+  deletedAt?: string;
 }
 
 interface TaskContextType {
   tasks: Task[];
   addTask: (text: string, date: string, time: string, category: TaskCategory, priority: TaskPriority) => void;
   completeTask: (id: string) => void;
-  deleteTask: (id: string) => void;
+  deleteTask: (id: string) => void;         // Sposta nel cestino
+  restoreTask: (id: string) => void;        // AGGIUNTO: Ripristina dal cestino
+  hardDeleteTask: (id: string) => void;     // AGGIUNTO: Elimina definitivamente
   toggleSubTask: (taskId: string, subTaskId: string) => void;
   addSubTask: (taskId: string, text: string) => void;
   deleteSubTask: (taskId: string, subTaskId: string) => void;
@@ -44,7 +48,22 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const savedTasks = await AsyncStorage.getItem(STORAGE_KEY);
         if (savedTasks !== null) {
-          setTasks(JSON.parse(savedTasks));
+          const parsedTasks: Task[] = JSON.parse(savedTasks);
+          
+          // PULIZIA AUTOMATICA: Elimina i task nel cestino da più di 30 giorni
+          const ora = new Date();
+          const limiteTrentaGiorni = new Date();
+          limiteTrentaGiorni.setDate(ora.getDate() - 30);
+
+          const filteredTrashTasks = parsedTasks.filter((task) => {
+            if (task.deleted && task.deletedAt) {
+              const dataEliminazione = new Date(task.deletedAt);
+              return dataEliminazione > limiteTrentaGiorni; // Tiene solo se sono passati meno di 30 giorni
+            }
+            return true;
+          });
+
+          setTasks(filteredTrashTasks);
         }
       } catch (error) {
         console.error(error);
@@ -64,7 +83,6 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveTasks();
   }, [tasks]);
 
-  // AGGIORNATO: Crea il task assegnandogli la priorità scelta e un array subTasks inizialmente vuoto
   const addTask = (text: string, date: string, time: string, category: TaskCategory, priority: TaskPriority) => {
     if (text.trim() === '') return;
     setTasks((prev) => [
@@ -78,6 +96,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         category,
         priority,
         subTasks: [],
+        deleted: false, // Inizializzato come non eliminato
       },
     ]);
   };
@@ -88,7 +107,26 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
+  // MODIFICATO: Invece di fare il filter, imposta 'deleted: true' e registra il timestamp
   const deleteTask = (id: string) => {
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === id ? { ...task, deleted: true, deletedAt: new Date().toISOString() } : task
+      )
+    );
+  };
+
+  // AGGIUNTO: Ripristina il task e rimuove la data di eliminazione
+  const restoreTask = (id: string) => {
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === id ? { ...task, deleted: false, deletedAt: undefined } : task
+      )
+    );
+  };
+
+  // AGGIUNTO: Rimuove definitivamente l'elemento dall'array (vecchio comportamento di deleteTask)
+  const hardDeleteTask = (id: string) => {
     setTasks((prev) => prev.filter((task) => task.id !== id));
   };
 
@@ -139,8 +177,14 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let completed = 0;
     let active = 0;
     let expired = 0;
+    let totalValidTasks = 0;
 
     tasks.forEach((task) => {
+      // Ignora i task che si trovano nel cestino nel calcolo delle statistiche
+      if (task.deleted) return;
+
+      totalValidTasks++;
+
       if (task.completed) {
         completed++;
       } else {
@@ -156,10 +200,9 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    const total = tasks.length;
-    const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const rate = totalValidTasks > 0 ? Math.round((completed / totalValidTasks) * 100) : 0;
 
-    return { completed, active, expired, total, rate };
+    return { completed, active, expired, total: totalValidTasks, rate };
   };
 
   return (
@@ -169,6 +212,8 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addTask,
         completeTask,
         deleteTask,
+        restoreTask,
+        hardDeleteTask,
         toggleSubTask,
         addSubTask,
         deleteSubTask,
