@@ -1,5 +1,18 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
+
+// Configura il comportamento delle notifiche inserendo i campi mancanti richiesti (shouldShowBanner, shouldShowList)
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true, // CORRETTO: Aggiunto per compatibilità SDK 54+
+    shouldShowList: true,   // CORRETTO: Aggiunto per compatibilità SDK 54+
+  }),
+});
 
 export type TaskCategory = 'Personale' | 'Lavoro' | 'Studio' | 'Spesa';
 export type TaskPriority = 'Alta' | 'Media' | 'Bassa';
@@ -19,18 +32,18 @@ export interface Task {
   category: TaskCategory;
   priority: TaskPriority;
   subTasks: SubTask[];
-  // AGGIUNTO: Campi obbligatori per la gestione del Cestino
   deleted: boolean;
   deletedAt?: string;
+  notificationIds?: string[];
 }
 
 interface TaskContextType {
   tasks: Task[];
-  addTask: (text: string, date: string, time: string, category: TaskCategory, priority: TaskPriority) => void;
+  addTask: (text: string, date: string, time: string, category: TaskCategory, priority: TaskPriority) => Promise<void>;
   completeTask: (id: string) => void;
-  deleteTask: (id: string) => void;         // Sposta nel cestino
-  restoreTask: (id: string) => void;        // AGGIUNTO: Ripristina dal cestino
-  hardDeleteTask: (id: string) => void;     // AGGIUNTO: Elimina definitivamente
+  deleteTask: (id: string) => void;
+  restoreTask: (id: string) => void;
+  hardDeleteTask: (id: string) => void;
   toggleSubTask: (taskId: string, subTaskId: string) => void;
   addSubTask: (taskId: string, text: string) => void;
   deleteSubTask: (taskId: string, subTaskId: string) => void;
@@ -43,14 +56,40 @@ const STORAGE_KEY = '@todo_tasks_storage';
 export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
 
+  // 1. Richiesta dei permessi all'avvio dell'app
+  useEffect(() => {
+    const requestPermissions = async () => {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        console.log('Permessi notifiche rifiutati!');
+        return;
+      }
+
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+        });
+      }
+    };
+
+    requestPermissions();
+  }, []);
+
   useEffect(() => {
     const loadTasks = async () => {
       try {
         const savedTasks = await AsyncStorage.getItem(STORAGE_KEY);
         if (savedTasks !== null) {
           const parsedTasks: Task[] = JSON.parse(savedTasks);
-          
-          // PULIZIA AUTOMATICA: Elimina i task nel cestino da più di 30 giorni
+
           const ora = new Date();
           const limiteTrentaGiorni = new Date();
           limiteTrentaGiorni.setDate(ora.getDate() - 30);
@@ -58,7 +97,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const filteredTrashTasks = parsedTasks.filter((task) => {
             if (task.deleted && task.deletedAt) {
               const dataEliminazione = new Date(task.deletedAt);
-              return dataEliminazione > limiteTrentaGiorni; // Tiene solo se sono passati meno di 30 giorni
+              return dataEliminazione > limiteTrentaGiorni;
             }
             return true;
           });
@@ -83,8 +122,69 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveTasks();
   }, [tasks]);
 
-  const addTask = (text: string, date: string, time: string, category: TaskCategory, priority: TaskPriority) => {
+  const cancelTaskNotifications = async (notificationIds?: string[]) => {
+    if (notificationIds && notificationIds.length > 0) {
+      for (const id of notificationIds) {
+        await Notifications.cancelScheduledNotificationAsync(id);
+      }
+    }
+  };
+
+  const addTask = async (text: string, date: string, time: string, category: TaskCategory, priority: TaskPriority) => {
     if (text.trim() === '') return;
+
+    const [year, month, day] = date.split('-').map(Number);
+    const [hours, minutes] = time.split(':').map(Number);
+    const targetDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    const now = new Date();
+
+    const scheduledIds: string[] = [];
+
+    if (targetDate > now) {
+      try {
+        // Calcoliamo quanti secondi mancano da adesso al momento esatto della scadenza
+        const secondiAllaScadenza = Math.floor((targetDate.getTime() - now.getTime()) / 1000);
+
+        if (secondiAllaScadenza > 0) {
+          // 1. Notifica al momento esatto della scadenza
+          const idScadenza = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `⏰ Task Scaduto! [${category}]`,
+              body: `Il tempo per "${text}" è scaduto!`,
+              sound: true,
+              priority: Notifications.AndroidNotificationPriority.MAX,
+            },
+            // CORRETTO: Usiamo un trigger basato su un timer in secondi (tipo nativo stabilissimo)
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: secondiAllaScadenza,
+            },
+          });
+          scheduledIds.push(idScadenza);
+        }
+
+        // 2. Notifica 15 minuti prima della scadenza
+        const secondiQuindiciPrima = secondiAllaScadenza - 15 * 60; // 15 minuti in secondi
+        if (secondiQuindiciPrima > 0) {
+          const idPreavviso = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `⏳ Scadenza imminente! (${priority})`,
+              body: `Il task "${text}" scade tra 15 minuti.`,
+              sound: true,
+            },
+            // CORRETTO: Usiamo lo stesso approccio stabile a secondi anche per il preavviso
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: secondiQuindiciPrima,
+            },
+          });
+          scheduledIds.push(idPreavviso);
+        }
+      } catch (error) {
+        console.error("Errore nella programmazione delle notifiche:", error);
+      }
+    }
+
     setTasks((prev) => [
       ...prev,
       {
@@ -96,27 +196,39 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         category,
         priority,
         subTasks: [],
-        deleted: false, // Inizializzato come non eliminato
+        deleted: false,
+        notificationIds: scheduledIds,
       },
     ]);
   };
 
   const completeTask = (id: string) => {
     setTasks((prev) =>
-      prev.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task))
+      prev.map((task) => {
+        if (task.id === id) {
+          const nextCompleted = !task.completed;
+          if (nextCompleted) {
+            cancelTaskNotifications(task.notificationIds);
+          }
+          return { ...task, completed: nextCompleted };
+        }
+        return task;
+      })
     );
   };
 
-  // MODIFICATO: Invece di fare il filter, imposta 'deleted: true' e registra il timestamp
   const deleteTask = (id: string) => {
     setTasks((prev) =>
-      prev.map((task) =>
-        task.id === id ? { ...task, deleted: true, deletedAt: new Date().toISOString() } : task
-      )
+      prev.map((task) => {
+        if (task.id === id) {
+          cancelTaskNotifications(task.notificationIds);
+          return { ...task, deleted: true, deletedAt: new Date().toISOString() };
+        }
+        return task;
+      })
     );
   };
 
-  // AGGIUNTO: Ripristina il task e rimuove la data di eliminazione
   const restoreTask = (id: string) => {
     setTasks((prev) =>
       prev.map((task) =>
@@ -125,9 +237,12 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  // AGGIUNTO: Rimuove definitivamente l'elemento dall'array (vecchio comportamento di deleteTask)
   const hardDeleteTask = (id: string) => {
-    setTasks((prev) => prev.filter((task) => task.id !== id));
+    setTasks((prev) => {
+      const taskDaRimuovere = prev.find((t) => t.id === id);
+      cancelTaskNotifications(taskDaRimuovere?.notificationIds);
+      return prev.filter((task) => task.id !== id);
+    });
   };
 
   const toggleSubTask = (taskId: string, subTaskId: string) => {
@@ -180,9 +295,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let totalValidTasks = 0;
 
     tasks.forEach((task) => {
-      // Ignora i task che si trovano nel cestino nel calcolo delle statistiche
       if (task.deleted) return;
-
       totalValidTasks++;
 
       if (task.completed) {
@@ -201,7 +314,6 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     const rate = totalValidTasks > 0 ? Math.round((completed / totalValidTasks) * 100) : 0;
-
     return { completed, active, expired, total: totalValidTasks, rate };
   };
 
