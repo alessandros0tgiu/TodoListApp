@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Platform, Alert, ScrollView, Modal } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Platform, ScrollView, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useTasks, TaskCategory, TaskPriority } from '../../context/TaskContext';
@@ -34,8 +34,9 @@ export default function NewTaskScreen() {
   const [category, setCategory] = useState<TaskCategory>('Personale');
   const [priority, setPriority] = useState<TaskPriority>('Media');
 
-  // Stato per gestire la visibilità della modale custom di successo
+  // Stati per gestire la visibilità delle modale custom
   const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
+  const [isErrorModalVisible, setIsErrorModalVisible] = useState(false);
   
   // Formattatori di supporto per data e ora
   const formatDateString = (date: Date) => date.toISOString().split('T')[0];
@@ -73,11 +74,8 @@ export default function NewTaskScreen() {
   // Validazione ed invio del form al Context globale
   const handleAdd = () => {
     if (text.trim() === '') {
-      Alert.alert(
-        'Attenzione',
-        'Non puoi aggiungere un task vuoto. Inserisci una descrizione valida!',
-        [{ text: 'OK' }]
-      );
+      // Mostra la modale di errore invece del vecchio Alert.alert nativo
+      setIsErrorModalVisible(true);
       return;
     }
     
@@ -85,7 +83,7 @@ export default function NewTaskScreen() {
     setText('');
     setPriority('Media'); // Reset della priorità sul valore di default
     
-    // Mostra la modale di successo personalizzata invece dell'Alert nativo
+    // Mostra la modale di successo personalizzata
     setIsSuccessModalVisible(true);
   };
 
@@ -220,12 +218,11 @@ export default function NewTaskScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.modalContent}>
-              {/* Icona di spunta cerchiata (Successo verde) */}
               <Ionicons 
                 name="checkmark-circle-outline" 
                 size={52} 
                 color="#10b981" 
-                style={styles.successIcon} 
+                style={styles.modalIcon} 
               />
               <Text style={[styles.modalTitle, { color: colors.text }]}>
                 Operazione Riuscita!
@@ -241,6 +238,42 @@ export default function NewTaskScreen() {
                 onPress={() => setIsSuccessModalVisible(false)}
               >
                 <Text style={styles.confirmButtonText}>Ottimo</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODALE CUSTOM OPERAZIONE FALLITA (TASK VUOTO) */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={isErrorModalVisible}
+        onRequestClose={() => setIsErrorModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalContent}>
+              <Ionicons 
+                name="close-circle-outline" 
+                size={52} 
+                color="#ff4444" 
+                style={styles.modalIcon} 
+              />
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Operazione Fallita
+              </Text>
+              <Text style={[styles.modalDescription, { color: colors.textMuted }]}>
+                Non puoi aggiungere un task vuoto. Inserisci una descrizione valida!
+              </Text>
+            </View>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity 
+                style={styles.errorButton} 
+                onPress={() => setIsErrorModalVisible(false)}
+              >
+                <Text style={styles.errorButtonText}>Riprova</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -274,7 +307,7 @@ const styles = StyleSheet.create({
   nowButtonText: { fontWeight: '600', fontSize: 14 },
   addButton: { flex: 0.64, backgroundColor: '#2f95dc', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 12, borderRadius: 6 },
   addButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  // Stili della modale personalizzata
+  // Stili condivisi delle modale personalizzate
   modalOverlay: { 
     flex: 1, 
     backgroundColor: 'rgba(0, 0, 0, 0.6)', 
@@ -299,7 +332,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     marginBottom: 20 
   },
-  successIcon: { 
+  modalIcon: { 
     marginBottom: 10 
   },
   modalTitle: { 
@@ -331,6 +364,21 @@ const styles = StyleSheet.create({
     borderColor: '#10b981' 
   },
   confirmButtonText: { 
+    color: '#fff', 
+    fontSize: 14, 
+    fontWeight: 'bold' 
+  },
+  errorButton: { 
+    width: '70%',
+    backgroundColor: '#ff4444', 
+    paddingVertical: 10, 
+    borderRadius: 99, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    borderWidth: 1.5, 
+    borderColor: '#ff4444' 
+  },
+  errorButtonText: { 
     color: '#fff', 
     fontSize: 14, 
     fontWeight: 'bold' 
