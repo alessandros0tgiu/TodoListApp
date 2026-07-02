@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Platform, Alert, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Platform, Alert, ScrollView, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useTasks, TaskCategory, TaskPriority } from '../../context/TaskContext';
-import { useTheme } from '../../context/ThemeContext'; // IMPORTATO
-import ThemeSwitch from '../../context/ThemeSwitch'; // IMPORTATO
+import { useTheme } from '../../context/ThemeContext'; 
+import ThemeSwitch from '../../context/ThemeSwitch'; 
 
 // Mappa dei colori associati in modo fisso a ciascun tag di categoria
 export const categoryColors: Record<TaskCategory, string> = {
@@ -24,7 +24,7 @@ export const priorityColors: Record<TaskPriority, string> = {
 export default function NewTaskScreen() {
   // Integrazione con lo stato globale (Context)
   const { addTask } = useTasks();
-  const { colors, isDarkMode } = useTheme(); // ESTRATTO
+  const { colors, isDarkMode } = useTheme(); 
   
   // Stati locali del form
   const [text, setText] = useState('');
@@ -33,6 +33,9 @@ export default function NewTaskScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [category, setCategory] = useState<TaskCategory>('Personale');
   const [priority, setPriority] = useState<TaskPriority>('Media');
+
+  // Stato per gestire la visibilità della modale custom di successo
+  const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
   
   // Formattatori di supporto per data e ora
   const formatDateString = (date: Date) => date.toISOString().split('T')[0];
@@ -82,7 +85,8 @@ export default function NewTaskScreen() {
     setText('');
     setPriority('Media'); // Reset della priorità sul valore di default
     
-    Alert.alert('Successo', 'Task aggiunto correttamente!', [{ text: 'Ottimo' }]);
+    // Mostra la modale di successo personalizzata invece dell'Alert nativo
+    setIsSuccessModalVisible(true);
   };
 
   return (
@@ -205,6 +209,43 @@ export default function NewTaskScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* MODALE CUSTOM OPERAZIONE RIUSCITA */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={isSuccessModalVisible}
+        onRequestClose={() => setIsSuccessModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalContent}>
+              {/* Icona di spunta cerchiata (Successo verde) */}
+              <Ionicons 
+                name="checkmark-circle-outline" 
+                size={52} 
+                color="#10b981" 
+                style={styles.successIcon} 
+              />
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Operazione Riuscita!
+              </Text>
+              <Text style={[styles.modalDescription, { color: colors.textMuted }]}>
+                Task inserito correttamente.
+              </Text>
+            </View>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity 
+                style={styles.confirmButton} 
+                onPress={() => setIsSuccessModalVisible(false)}
+              >
+                <Text style={styles.confirmButtonText}>Ottimo</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -233,4 +274,65 @@ const styles = StyleSheet.create({
   nowButtonText: { fontWeight: '600', fontSize: 14 },
   addButton: { flex: 0.64, backgroundColor: '#2f95dc', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 12, borderRadius: 6 },
   addButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  // Stili della modale personalizzata
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0, 0, 0, 0.6)', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    padding: 20 
+  },
+  modalCard: { 
+    width: '85%', 
+    maxWidth: 290, 
+    borderRadius: 20, 
+    borderWidth: 1, 
+    padding: 24, 
+    alignItems: 'center', 
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+  },
+  modalContent: { 
+    alignItems: 'center', 
+    marginBottom: 20 
+  },
+  successIcon: { 
+    marginBottom: 10 
+  },
+  modalTitle: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    textAlign: 'center', 
+    marginBottom: 10 
+  },
+  modalDescription: { 
+    fontSize: 13, 
+    textAlign: 'center', 
+    lineHeight: 18, 
+    fontWeight: '500', 
+    paddingHorizontal: 5 
+  },
+  modalActionsRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    width: '100%' 
+  },
+  confirmButton: { 
+    width: '70%',
+    backgroundColor: '#10b981', 
+    paddingVertical: 10, 
+    borderRadius: 99, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    borderWidth: 1.5, 
+    borderColor: '#10b981' 
+  },
+  confirmButtonText: { 
+    color: '#fff', 
+    fontSize: 14, 
+    fontWeight: 'bold' 
+  }
 });

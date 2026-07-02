@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, TextInput, Alert, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, TextInput, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTasks, TaskCategory, TaskPriority } from '../../context/TaskContext';
-import { useTheme } from '../../context/ThemeContext'; // IMPORTATO
-import ThemeSwitch from '../../context/ThemeSwitch'; // IMPORTATO
+import { useTheme } from '../../context/ThemeContext'; 
+import ThemeSwitch from '../../context/ThemeSwitch'; 
 import { categoryColors, priorityColors } from './newtask';
 
 type OrderType = 'Data' | 'Priorità' | 'Alfabetico';
 
 export default function OldTaskScreen() {
-  // Estratte le nuove funzioni dal Context modificato per gestire il Cestino
   const { tasks, completeTask, deleteTask, restoreTask, hardDeleteTask, toggleSubTask, addSubTask, deleteSubTask } = useTasks();
-  const { colors, isDarkMode } = useTheme(); // ESTRATTO
+  const { colors, isDarkMode } = useTheme();
   const now = new Date();
 
-  // Stati locali per filtri, ricerca e ordinamento originali
+  // Stati per filtri, ricerca e ordinamento
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<TaskCategory | 'Tutti'>('Tutti');
   const [currentOrder, setCurrentOrder] = useState<OrderType>('Data');
@@ -23,7 +22,10 @@ export default function OldTaskScreen() {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [newSubTaskText, setNewSubTaskText] = useState('');
 
-  // Funzione di calcolo scadenza originale
+  // Stati per la modale di conferma personalizzata
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [taskToDeleteId, setTaskToDeleteId] = useState<string | null>(null);
+
   const isTaskExpired = (taskDate: string, taskTime: string) => {
     const [year, month, day] = taskDate.split('-').map(Number);
     const [hours, minutes] = taskTime.split(':').map(Number);
@@ -31,7 +33,6 @@ export default function OldTaskScreen() {
     return now > taskDateTime;
   };
 
-  // Calcola i giorni rimasti nel cestino prima dei 30 giorni
   const getDaysLeft = (deletedAt?: string) => {
     if (!deletedAt) return 30;
     const diffTime = now.getTime() - new Date(deletedAt).getTime();
@@ -55,14 +56,25 @@ export default function OldTaskScreen() {
     setNewSubTaskText('');
   };
 
-  // 1. APPLICAZIONE FILTRI DI RICERCA E CATEGORIA (Include tutti i task per vederli insieme)
+  const triggerHardDelete = (id: string) => {
+    setTaskToDeleteId(id);
+    setIsModalVisible(true);
+  };
+
+  const confirmHardDelete = () => {
+    if (taskToDeleteId) {
+      hardDeleteTask(taskToDeleteId);
+    }
+    setIsModalVisible(false);
+    setTaskToDeleteId(null);
+  };
+
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.text.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter = selectedFilter === 'Tutti' || task.category === selectedFilter;
     return matchesSearch && matchesFilter;
   });
 
-  // 2. APPLICAZIONE LOGICA DI ORDINAMENTO SELEZIONATA originale
   const priorityWeight: Record<TaskPriority, number> = { Alta: 3, Media: 2, Bassa: 1 };
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
@@ -86,7 +98,6 @@ export default function OldTaskScreen() {
         <ThemeSwitch />
       </View>
 
-      {/* BARRA DI RICERCA + PULSANTE 3 LINEE (MENU) */}
       <View style={styles.headerActionsRow}>
         <View style={[styles.searchContainer, { backgroundColor: colors.card }]}>
           <Ionicons name="search-outline" size={20} color={colors.textMuted} style={{ marginRight: 8 }} />
@@ -107,7 +118,6 @@ export default function OldTaskScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* PANNELLO DI ORDINAMENTO A SCOMPARSA */}
       {showOrderMenu && (
         <View style={[styles.dropdownPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Ordina l'elenco per:</Text>
@@ -134,7 +144,6 @@ export default function OldTaskScreen() {
         </View>
       )}
 
-      {/* FILTRI CATEGORIA STATICI */}
       <View style={styles.filterRow}>
         {(['Tutti', 'Personale', 'Lavoro', 'Studio', 'Spesa'] as const).map((filter) => (
           <TouchableOpacity
@@ -153,7 +162,6 @@ export default function OldTaskScreen() {
         ))}
       </View>
 
-      {/* LISTA DEI TASK */}
       <FlatList
         data={sortedTasks}
         keyExtractor={(item) => item.id}
@@ -172,7 +180,7 @@ export default function OldTaskScreen() {
                   styles.taskItem,
                   item.completed && !item.deleted && styles.completedItem,
                   expired && !item.deleted && { backgroundColor: colors.expiredBg, borderColor: colors.expiredBorder, borderWidth: 1 },
-                  item.deleted && styles.trashTaskItem // Applica stile opaco se cestinato
+                  item.deleted && styles.trashTaskItem
                 ]}
               >
                 <View style={styles.taskInfo}>
@@ -189,7 +197,6 @@ export default function OldTaskScreen() {
                     </Text>
                   </View>
 
-                  {/* Scritta dinamica in base allo stato attivo o cestinato */}
                   {item.deleted ? (
                     <Text style={[styles.dateText, { color: '#ffbb33', fontWeight: 'bold' }]}>
                       ⚠️ Nel Cestino (Rimozione automatica tra: {getDaysLeft(item.deletedAt)} gg)
@@ -201,22 +208,18 @@ export default function OldTaskScreen() {
                   )}
                 </View>
 
-                {/* Pulsanti Azione Condizionali */}
                 <View style={styles.actions}>
                   {item.deleted ? (
                     <>
-                      {/* Se cancellato: Bottone Ripristina */}
                       <TouchableOpacity onPress={() => restoreTask(item.id)} style={styles.iconButton}>
                         <Ionicons name="arrow-undo-outline" size={24} color="#2f95dc" />
                       </TouchableOpacity>
-                      {/* Se cancellato: Bottone Eliminazione Definitiva */}
-                      <TouchableOpacity onPress={() => Alert.alert('Elimina Definitivamente', 'Vuoi cancellare per sempre questo task?', [{ text: 'No' }, { text: 'Sì', onPress: () => hardDeleteTask(item.id) }])}>
+                      <TouchableOpacity onPress={() => triggerHardDelete(item.id)}>
                         <Ionicons name="trash-sharp" size={24} color="#ff4444" />
                       </TouchableOpacity>
                     </>
                   ) : (
                     <>
-                      {/* Se Attivo: Pulsanti standard originali */}
                       <TouchableOpacity onPress={() => completeTask(item.id)} style={styles.iconButton}>
                         <Ionicons
                           name={item.completed ? "checkmark-circle" : "ellipse-outline"}
@@ -232,7 +235,6 @@ export default function OldTaskScreen() {
                 </View>
               </TouchableOpacity>
 
-              {/* SEZIONE SOTTO-TASK (Disponibile solo se il task non è cancellato) */}
               {!item.deleted && isExpanded && (
                 <View style={[styles.subTaskSection, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
                   <Text style={[styles.subSectionTitle, { color: colors.textMuted }]}>📋 Checklist Sotto-task:</Text>
@@ -279,6 +281,39 @@ export default function OldTaskScreen() {
           </View>
         }
       />
+
+      {/* MODALE DI CONFERMA ELIMINAZIONE CUSTOM */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={isModalVisible}
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalContent}>
+              <Ionicons name="trash" size={48} color="#ff4444" style={styles.trashIcon} />
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Sei sicuro?</Text>
+              <Text style={[styles.modalDescription, { color: colors.textMuted }]}>
+                Vuoi davvero procedere? Questa azione è definitiva e il compito non potrà più essere recuperato.
+              </Text>
+            </View>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity 
+                style={[styles.cancelButton, { backgroundColor: isDarkMode ? '#2a2a3a' : '#e2e8f0', borderColor: colors.border }]} 
+                onPress={() => setIsModalVisible(false)}
+              >
+                <Text style={[styles.cancelButtonText, { color: colors.text }]}>Annulla</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.confirmButton} onPress={confirmHardDelete}>
+                <Text style={styles.confirmButtonText}>Conferma</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -326,5 +361,16 @@ const styles = StyleSheet.create({
   subTaskInput: { flex: 1, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 4, fontSize: 13 },
   subTaskAddBtn: { backgroundColor: '#2f95dc', width: 32, height: 32, borderRadius: 4, justifyContent: 'center', alignItems: 'center' },
   emptyContainer: { alignItems: 'center', marginTop: 30, padding: 10 },
-  emptyText: { fontSize: 14 }
+  emptyText: { fontSize: 14 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalCard: { width: '85%', maxWidth: 320, borderRadius: 20, borderWidth: 1, padding: 24, alignItems: 'center', elevation: 10 },
+  modalContent: { alignItems: 'center', marginBottom: 20 },
+  trashIcon: { marginBottom: 12 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 10 },
+  modalDescription: { fontSize: 13, textAlign: 'center', lineHeight: 18, fontWeight: '500', paddingHorizontal: 5 },
+  modalActionsRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', gap: 12 },
+  cancelButton: { flex: 1, paddingVertical: 10, borderRadius: 99, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
+  cancelButtonText: { fontSize: 14, fontWeight: '600' },
+  confirmButton: { flex: 1, backgroundColor: '#ff4444', paddingVertical: 10, borderRadius: 99, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#ff4444' },
+  confirmButtonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' }
 });
